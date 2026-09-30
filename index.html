@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1b1b1f" />
+  <meta name="description" content="Programa de la reunión Vida y Ministerio Cristianos: carga la guía, asigna y exporta." />
+  <title>Programa Reunión</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icono.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icono-192.png" />
+  <link rel="stylesheet" href="fonts/fonts.css" />
+  <link rel="stylesheet" href="css/cajaapp.css" />
+  <link rel="stylesheet" href="css/programa.css" />
+</head>
+<body>
+  <div class="accent-strip"></div>
+  <div class="app">
+    <aside class="sidebar" id="menu">
+      <div class="sidebar-brand">
+        <div class="brand-mark">PR</div>
+        <div class="brand-text">
+          <div class="t1">Programa Reunión</div>
+          <div class="t2">Vida y Ministerio Cristianos</div>
+        </div>
+      </div>
+      <div class="nav-section-label">Programas</div>
+      <nav id="nav-meses"></nav>
+      <div class="nav-section-label">Preparar</div>
+      <nav id="nav-preparar"></nav>
+      <div class="sidebar-footer">
+        <button class="btn primary btn-instalar" id="btn-instalar" type="button" hidden>Instalar la app</button>
+        <div class="pie-app" id="pie-app"></div>
+      </div>
+    </aside>
+    <div class="velo" id="velo"></div>
+
+    <main class="main">
+      <div class="topbar">
+        <button class="icon-btn btn-menu" id="btn-menu" type="button" aria-label="Abrir menú" aria-controls="menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="crumb" id="crumb"></div>
+      </div>
+      <div class="content" id="contenido"></div>
+    </main>
+  </div>
+
+  <dialog id="dlg-parte" class="dialogo">
+    <form method="dialog" id="form-parte">
+      <h3 id="dlg-titulo">Editar parte</h3>
+      <div class="field">
+        <label class="label" for="dp-titulo">Título</label>
+        <input class="input" id="dp-titulo" required>
+      </div>
+      <div class="field corto">
+        <label class="label" for="dp-minutos">Minutos</label>
+        <input class="input" id="dp-minutos" type="number" inputmode="numeric" min="1" max="60" required>
+      </div>
+      <label class="check"><input type="checkbox" id="dp-ayudante"> Lleva ayudante</label>
+      <label class="check"><input type="checkbox" id="dp-consejo"> Suma 1 min de consejo después</label>
+      <div class="dlg-acciones">
+        <button class="btn danger-ghost sm" type="button" id="dp-borrar">Quitar parte</button>
+        <span class="espacio"></span>
+        <button class="btn ghost" value="cancelar" formnovalidate>Cancelar</button>
+        <button class="btn primary" value="guardar" id="dp-guardar">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+Librerías incluidas (copiadas de npm, sin compilar nada):
+
+  pdf.min.mjs, pdf.worker.min.mjs   pdfjs-dist 6.3.289, build «legacy» (Apache-2.0, pdfjs-LICENSE.txt)
+                                    La «legacy» funciona en Chrome/WebView de Android más antiguos;
+                                    la normal exige funciones muy nuevas (Math.sumPrecise).
+  exceljs.min.js                    exceljs 4.4.0        (MIT, exceljs-LICENSE.txt)
+
+AJUSTE EN pdf.worker.min.mjs (importante al actualizar pdf.js):
+La guía mwb_S_*.pdf trae títulos con letras espaciadas («7-13 DE SEPTIEMBRE»).
+Con los valores de fábrica pdf.js mete espacios falsos dentro de las palabras
+(«SEP T I EMB R E», «JER EMÍAS»). Se suben dos umbrales de 0.102 a 0.2:
+
+  sed 's/trackingSpaceMin=\.102\*\([a-zA-Z]\);/trackingSpaceMin=.2*\1;/; s/spaceInFlowMin=\.102\*\([a-zA-Z]\);/spaceInFlowMin=.2*\1;/' \
+      node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs > pdf.worker.min.mjs
+  (y copiar node_modules/pdfjs-dist/legacy/build/pdf.min.mjs tal cual)
+
+(En otra versión de pdf.js los nombres de variables del archivo minificado pueden
+cambiar: buscar "trackingSpaceMin=.102" y "spaceInFlowMin=.102".)
+Después de actualizar, correr la prueba del lector (node tests/probar_lector.mjs guia.pdf referencia.json):
+debe dar las 8 semanas iguales a la versión Python.
+
+Fuentes (carpeta fonts): Carlito y Caladea (OFL) son gemelas libres de Calibri y
+Cambria, para que el PDF salga igual en Android, que no trae las de Microsoft.
