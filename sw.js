@@ -2,7 +2,7 @@
 // La lista y la versión las escribe tools/preparar_publicacion.py (no editar a mano):
 // cada vez que cambia un archivo cambia la versión y los equipos bajan la nueva.
 
-const VERSION = '3e3744d094c1';
+const VERSION = '64a5e2bc5545';
 const ARCHIVOS = [
   './',
   './css/cajaapp.css',
