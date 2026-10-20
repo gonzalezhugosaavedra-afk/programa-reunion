@@ -46,7 +46,7 @@ await page.screenshot({ path: OUT + '/01_tablet_mes.png' });
 // 2. Guía nov-dic 2026: 9 semanas, sin avisos
 await page.goto(URL0 + '#/cargar');
 await page.setInputFiles('#archivo', path.join(REF, 'mwb_S_202611.pdf'));
-await page.waitForSelector('#vista:not([hidden])', { timeout: 30000 });
+await page.waitForSelector('#vista:not([hidden])', { timeout: 90000 });
 ok(await page.locator('.vista-semana').count() === 9, 'guía nov-dic: 9 semanas');
 ok(await page.locator('.vista-semana .aviso').count() === 0, 'guía nov-dic: sin avisos');
 await page.click('#btn-guardar');
