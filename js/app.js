@@ -125,16 +125,43 @@ function crumb(seccion, titulo) {
 
 // ── Pantalla del mes ─────────────────────────────────────────────────────
 
-function opcionesNombres(nombre, personas) {
+// Hermanos activos como objetos {nombre, sexo, cargo, lector}, en orden alfabético.
+const personasMenu = () => estado.personas.filter((p) => p.activo).sort((a, b) => P.compararNombres(a.nombre, b.nombre));
+
+// Menú de un puesto: primero quienes pueden hacerlo; para presidente, los
+// ministeriales aparte (excepción); al final los que aún no se clasifican.
+// Quien participa la semana anterior/siguiente (lectura o Maestros) va marcado ⚠.
+function opcionesNombres(nombre, pu, personas, vecinos) {
+  const opcion = (p, extra = '') => {
+    const marca = pu.estudiante && vecinos[p.nombre] ? ` ⚠ ${vecinos[p.nombre] === 'ambas' ? 'semanas vecinas' : 'semana ' + vecinos[p.nombre]}` : '';
+    return `<option value="${esc(p.nombre)}"${p.nombre === nombre ? ' selected' : ''}>${esc(p.nombre)}${marca}${extra}</option>`;
+  };
+  const pueden = [], excepcion = [], sinClasificar = [];
+  for (const p of personas) {
+    const c = P.cumple(p, pu.req);
+    if (c === true) pueden.push(p);
+    else if (c === null) sinClasificar.push(p);
+    else if (pu.req === 'anciano' && p.cargo === 'ministerial') excepcion.push(p);
+  }
   let h = '<option value="">—</option>';
-  if (nombre && !personas.includes(nombre)) h += `<option value="${esc(nombre)}" selected>${esc(nombre)} (no está en la lista)</option>`;
-  for (const p of personas) h += `<option value="${esc(p)}"${p === nombre ? ' selected' : ''}>${esc(p)}</option>`;
+  const visibles = new Set([...pueden, ...excepcion, ...sinClasificar].map((p) => p.nombre));
+  if (nombre && !visibles.has(nombre)) {
+    const conocido = personas.some((p) => p.nombre === nombre);
+    h += `<option value="${esc(nombre)}" selected>${esc(nombre)} (${conocido ? 'no corresponde' : 'no está en la lista'})</option>`;
+  }
+  h += pueden.map((p) => opcion(p)).join('');
+  if (excepcion.length) h += `<optgroup label="Siervos ministeriales (solo excepcional)">${excepcion.map((p) => opcion(p)).join('')}</optgroup>`;
+  if (sinClasificar.length) h += `<optgroup label="Sin clasificar (márcalos en Hermanos)">${sinClasificar.map((p) => opcion(p)).join('')}</optgroup>`;
   return h;
 }
 
-function selector(s, clave, nombre, personas) {
-  const rep = nombre && s.repetidos.includes(nombre) ? ' repetido' : '';
-  return `<select class="select sm nombre${rep}" data-semana="${s.id}" data-clave="${clave}" translate="no" aria-label="Nombre">${opcionesNombres(nombre, personas)}</select>`;
+function selector(s, pu, personas) {
+  const clases = ['select', 'sm', 'nombre'];
+  if (pu.nombre && s.repetidos.includes(pu.nombre)) clases.push('repetido');
+  if (pu.noCumple) clases.push('no-cumple');
+  if (pu.semanaSeguida) clases.push('semana-seguida');
+  const titulo = P.REQUISITOS[pu.req] ? ` title="${esc(P.REQUISITOS[pu.req][0].toUpperCase() + P.REQUISITOS[pu.req].slice(1))}"` : '';
+  return `<select class="${clases.join(' ')}" data-semana="${s.id}" data-clave="${pu.clave}" translate="no" aria-label="Nombre"${titulo}>${opcionesNombres(pu.nombre, pu, personas, s.vecinos || {})}</select>`;
 }
 
 function htmlSemana(s, personas, urlsImagen) {
@@ -201,7 +228,7 @@ function htmlSemana(s, personas, urlsImagen) {
       <tr class="fila-presidente">
         <td class="hora"></td>
         <td class="texto"><strong>Presidente</strong></td>
-        <td class="puestos"><div class="puesto"><span class="rol"></span>${selector(s, 'presidente', s.presidente, personas)}</div></td>
+        <td class="puestos"><div class="puesto"><span class="rol"></span>${selector(s, { clave: 'presidente', nombre: s.presidente, req: 'anciano', noCumple: s.avisos.some((a) => a.includes('«Presidente»')) }, personas)}</div></td>
       </tr>`;
     for (const f of s.filas) {
       if (f.tipo === 'seccion') {
@@ -215,7 +242,7 @@ function htmlSemana(s, personas, urlsImagen) {
       }
       const puestos = f.puestos.map((pu) => `<div class="puesto"><span class="rol">${esc(pu.rol)}</span>${pu.clave === 'so_nombre'
         ? `<span class="so-nombre" translate="no">${esc(pu.nombre || '(nombre arriba)')}</span>`
-        : selector(s, pu.clave, pu.nombre, personas)}</div>`).join('');
+        : selector(s, pu, personas)}</div>`).join('');
       h += `<tr class="fila-${f.tipo}${f.visita ? ' es-visita' : ''}">
         <td class="hora mono">${esc(f.hora)}</td>
         <td class="texto"><span>${esc(f.texto)}${f.minutos ? ` <span class="min">(${f.minutos} min)</span>` : ''}</span>${editar}</td>
@@ -271,7 +298,7 @@ async function pantallaMes(ym) {
   mesActual = ym;
   const mes = P.nombreMes(ym);
   crumb('Programas', mes);
-  const personas = P.personasActivas(estado);
+  const personas = personasMenu();
   const urls = await urlsDe(semanas);
   contenido.innerHTML = `
   <div class="page-header">
@@ -293,36 +320,33 @@ async function repintarSemana(id) {
   const sem = P.buscarSemana(estado, id);
   const viejo = $(`#s${id}`);
   if (!sem || !viejo) return;
-  const s = P.armarSemana(sem, estado.config);
+  const s = P.armarSemana(sem, estado.config, estado);
   const abierto = viejo.querySelector('details.ajustes')?.open;
   const tmp = document.createElement('div');
-  tmp.innerHTML = htmlSemana(s, P.personasActivas(estado), await urlsDe([s]));
+  tmp.innerHTML = htmlSemana(s, personasMenu(), await urlsDe([s]));
   const nuevo = tmp.firstElementChild;
   if (abierto) nuevo.querySelector('details.ajustes').open = true;
   viejo.replaceWith(nuevo);
 }
 
-// Tras elegir un nombre solo se actualizan los contadores (sin redibujar).
-function actualizarEstadoSemana(id) {
-  const card = $(`#s${id}`);
-  const s = P.armarSemana(P.buscarSemana(estado, id), estado.config);
-  const pend = card.querySelector('.pendientes');
-  if (pend) {
-    pend.textContent = s.pendientes === 0 ? 'Completa' : `${s.pendientes} por asignar`;
-    pend.classList.toggle('success', s.pendientes === 0);
-    pend.classList.toggle('warning', s.pendientes !== 0);
+// Tras elegir un nombre se redibuja la semana y sus vecinas (la regla de semanas
+// seguidas mira la anterior y la siguiente, aunque sean de otro mes).
+async function repintarConVecinas(id) {
+  const sem = P.buscarSemana(estado, id);
+  if (!sem) return;
+  const ids = [id];
+  for (const otra of estado.semanas) {
+    const dias = Math.round((new Date(otra.fecha_inicio) - new Date(sem.fecha_inicio)) / 86400000);
+    if (dias === 7 || dias === -7) ids.push(otra.id);
   }
-  const rep = card.querySelector('.repetidos');
-  rep.hidden = s.repetidos.length === 0;
-  rep.querySelector('.lista-repetidos').textContent = s.repetidos.join(', ');
-  $$('select.nombre', card).forEach((sel) => sel.classList.toggle('repetido', !!sel.value && s.repetidos.includes(sel.value)));
+  for (const x of ids) await repintarSemana(x);
 }
 
 contenido.addEventListener('change', async (ev) => {
   const el = ev.target;
   if (el.matches('select.nombre')) {
     const id = Number(el.dataset.semana);
-    if (await cambiar((e) => P.asignar(e, id, el.dataset.clave, el.value), el.value ? 'Guardado' : 'Quitado')) actualizarEstadoSemana(id);
+    if (await cambiar((e) => P.asignar(e, id, el.dataset.clave, el.value), el.value ? 'Guardado' : 'Quitado')) await repintarConVecinas(id);
     return;
   }
   if (el.matches('.campo-semana')) {
@@ -541,33 +565,65 @@ function pantallaCargar() {
 
 // ── Hermanos ─────────────────────────────────────────────────────────────
 
+const FILTROS_HERMANOS = {
+  todos: ['Todos', () => true],
+  sin: ['Sin clasificar', (p) => !p.sexo],
+  anciano: ['Ancianos', (p) => p.cargo === 'anciano'],
+  ministerial: ['Siervos ministeriales', (p) => p.cargo === 'ministerial'],
+  lector: ['Lectores del estudio', (p) => p.lector],
+  H: ['Hermanos', (p) => p.sexo === 'H'],
+  M: ['Hermanas', (p) => p.sexo === 'M'],
+  inactivos: ['Inactivos', (p) => !p.activo],
+};
+let filtroHermanos = 'todos';
+
 function pantallaHermanos() {
   crumb('Preparar', 'Hermanos');
   const hist = P.historial(estado);
-  const personas = [...estado.personas].sort((a, b) => (b.activo - a.activo) || P.compararNombres(a.nombre, b.nombre));
+  const sinClasificar = estado.personas.filter((p) => p.activo && !p.sexo).length;
+  if (!FILTROS_HERMANOS[filtroHermanos]) filtroHermanos = 'todos';
+  const personas = [...estado.personas]
+    .filter(FILTROS_HERMANOS[filtroHermanos][1])
+    .sort((a, b) => (b.activo - a.activo) || P.compararNombres(a.nombre, b.nombre));
+  const cuenta = (k) => estado.personas.filter((p) => (k === 'inactivos' || p.activo) && FILTROS_HERMANOS[k][1](p)).length;
+  const opcSexo = (p) => [['', '¿?'], ['H', 'Hermano'], ['M', 'Hermana']]
+    .map(([v, txt]) => `<option value="${v}"${(p.sexo || '') === v ? ' selected' : ''}>${txt}</option>`).join('');
+  const opcCargo = (p) => [['', '—'], ['ministerial', 'Siervo ministerial'], ['anciano', 'Anciano']]
+    .map(([v, txt]) => `<option value="${v}"${(p.cargo || '') === v ? ' selected' : ''}>${txt}</option>`).join('');
   contenido.innerHTML = `
   <div class="page-header">
     <div>
       <h1 class="page-title">Hermanos</h1>
-      <div class="page-sub">La lista que aparece en los menús de asignación. Quien se desactiva deja de aparecer, pero su historial se conserva.</div>
+      <div class="page-sub">La lista de los menús de asignación. Marca quién es hermano o hermana, los ancianos, los siervos
+        ministeriales y los lectores del estudio: así cada menú muestra solo a quienes pueden hacer esa parte.</div>
     </div>
   </div>
+  ${sinClasificar ? `<div class="card tarjeta-form aviso-clasificar">
+    <div><strong>${sinClasificar} sin clasificar.</strong> Mientras no se marquen aparecen al final de todos los menús.</div>
+    <button class="btn primary" type="button" id="btn-sugerir">Sugerir hermano/hermana por el nombre</button>
+  </div>` : ''}
   <div class="card tarjeta-form">
     <form id="form-nuevo" class="fila-form">
       <input class="input" id="nuevo-nombre" placeholder="Nombre y apellido, como quieres que salga en el programa" autocomplete="off" autocapitalize="words" translate="no">
       <button class="btn primary" type="submit">Agregar</button>
     </form>
   </div>
+  <div class="filtros" role="group" aria-label="Filtrar">
+    ${Object.entries(FILTROS_HERMANOS).map(([k, [txt]]) => `<button type="button" class="chip${k === filtroHermanos ? ' activo' : ''}" data-filtro="${k}">${txt} <span>${cuenta(k)}</span></button>`).join('')}
+  </div>
   <div class="card">
     <table class="table hermanos">
-      <thead><tr><th>Nombre</th><th class="center">Asignaciones</th><th>Última semana</th><th class="center">Activo</th></tr></thead>
+      <thead><tr><th>Nombre</th><th>Hermano/a</th><th>Cargo</th><th class="center">Lector</th><th class="center">Asignaciones</th><th>Última semana</th><th class="center">Activo</th></tr></thead>
       <tbody>${personas.map((p) => `
-        <tr class="${p.activo ? '' : 'inactivo'}" data-id="${p.id}">
+        <tr class="${p.activo ? '' : 'inactivo'}${p.sexo ? '' : ' sin-clasificar'}" data-id="${p.id}">
           <td class="nombre-td"><input class="input sm nombre-persona" value="${esc(p.nombre)}" data-original="${esc(p.nombre)}" translate="no" aria-label="Nombre"></td>
+          <td class="sexo-td"><select class="select sm dato-persona" data-campo="sexo" aria-label="Hermano o hermana">${opcSexo(p)}</select></td>
+          <td class="cargo-td"><select class="select sm dato-persona" data-campo="cargo" aria-label="Cargo"${p.sexo === 'H' ? '' : ' disabled'}>${opcCargo(p)}</select></td>
+          <td class="center lector-td"><label><input type="checkbox" class="dato-persona" data-campo="lector"${p.lector ? ' checked' : ''}${p.sexo === 'H' ? '' : ' disabled'}> <span>Lector</span></label></td>
           <td class="center mono dato" data-label="Asignaciones:">${hist[p.nombre]?.veces || 0}</td>
           <td class="mono dato" data-label="Última:">${hist[p.nombre]?.ultima || '—'}</td>
           <td class="center activo-td"><label><input type="checkbox" class="activo-persona"${p.activo ? ' checked' : ''}> <span>Activo</span></label></td>
-        </tr>`).join('') || '<tr><td colspan="4" class="vacio-grande">Todavía no hay nombres. Agrégalos arriba o carga un respaldo.</td></tr>'}
+        </tr>`).join('') || `<tr><td colspan="7" class="vacio-grande">${estado.personas.length ? 'Nadie en este filtro.' : 'Todavía no hay nombres. Agrégalos arriba o carga un respaldo.'}</td></tr>`}
       </tbody>
     </table>
   </div>`;
@@ -576,7 +632,21 @@ function pantallaHermanos() {
     e.preventDefault();
     const inp = $('#nuevo-nombre');
     if (!inp.value.trim()) return;
-    if (await cambiar((x) => P.agregarPersona(x, inp.value), 'Agregado')) pantallaHermanos();
+    if (await cambiar((x) => {
+      P.agregarPersona(x, inp.value);
+      // El nuevo queda con la sugerencia por nombre; se corrige en la misma fila.
+      P.sugerirSexos(x);
+    }, 'Agregado')) pantallaHermanos();
+  });
+
+  $$('.filtros .chip', contenido).forEach((b) => b.addEventListener('click', () => { filtroHermanos = b.dataset.filtro; pantallaHermanos(); }));
+
+  $('#btn-sugerir')?.addEventListener('click', async () => {
+    let n = 0;
+    if (await cambiar((x) => { n = P.sugerirSexos(x); }, null)) {
+      toast(n ? `Se sugirieron ${n}. Revisa la lista y corrige lo que no corresponda.` : 'No reconocí ningún nombre más: márcalos a mano.');
+      pantallaHermanos();
+    }
   });
 
   $$('tr[data-id]', contenido).forEach((tr) => {
@@ -598,6 +668,18 @@ function pantallaHermanos() {
     };
     nombre.addEventListener('change', guardar);
     activo.addEventListener('change', guardar);
+
+    $$('.dato-persona', tr).forEach((el) => el.addEventListener('change', async () => {
+      const valor = el.type === 'checkbox' ? el.checked : (el.value || null);
+      if (!await cambiar((x) => P.editarDatosPersona(x, tr.dataset.id, { [el.dataset.campo]: valor }))) return;
+      // Hermana: sin cargo ni lector. Se ajusta la fila sin redibujar la lista.
+      const p = estado.personas.find((x) => x.id === Number(tr.dataset.id));
+      const cargo = $('[data-campo="cargo"]', tr), lector = $('[data-campo="lector"]', tr);
+      cargo.disabled = lector.disabled = p.sexo !== 'H';
+      cargo.value = p.cargo || '';
+      lector.checked = !!p.lector;
+      tr.classList.toggle('sin-clasificar', !p.sexo);
+    }));
   });
 }
 

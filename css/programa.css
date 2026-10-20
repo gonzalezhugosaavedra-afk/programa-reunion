@@ -229,23 +229,55 @@ body { overscroll-behavior-y: none; }
   .config-grid { grid-template-columns: 1fr; }
   .info { grid-template-columns: 1fr; }
 
-  .hermanos thead { display: none; }
-  .hermanos, .hermanos tbody { display: block; }
-  .hermanos tr { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-  .hermanos td { display: block; padding: 0 !important; border: none !important; }
-  .hermanos td.nombre-td { grid-column: 1 / -1; }
-  .hermanos .input { max-width: none; }
-  .hermanos .dato { font-size: 12px; color: var(--text-3); }
-  .hermanos .dato::before { content: attr(data-label) ' '; }
-  .hermanos td.center { text-align: left; }
-  .hermanos td.activo-td { grid-row: 2 / span 2; grid-column: 2; align-self: center; }
-  .hermanos td.activo-td label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
-
   .toast { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); max-width: none; text-align: center; }
   .dialogo { padding: 18px; }
   .dlg-acciones .btn { flex: 1; justify-content: center; }
   .dlg-acciones .espacio { display: none; }
 }
-@media (min-width: 721px) {
-  .hermanos .activo-td label span { display: none; }
+/* Hermanos: tarjeta por persona hasta tablet vertical (en tabla no caben los menús). */
+@media (max-width: 1000px) {
+  .hermanos thead { display: none; }
+  .hermanos, .hermanos tbody { display: block; }
+  .hermanos tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; padding: 12px; border-bottom: 1px solid var(--border);
+    grid-template-areas: "nombre nombre" "sexo cargo" "lector activo" "veces ultima";
+  }
+  .hermanos td { display: block; padding: 0 !important; border: none !important; }
+  .hermanos td.nombre-td { grid-area: nombre; }
+  .hermanos td.sexo-td { grid-area: sexo; }
+  .hermanos td.cargo-td { grid-area: cargo; }
+  .hermanos td.lector-td { grid-area: lector; }
+  .hermanos td.activo-td { grid-area: activo; }
+  .hermanos td.dato:nth-child(5) { grid-area: veces; }
+  .hermanos td.dato:nth-child(6) { grid-area: ultima; }
+  .hermanos .input { max-width: none; }
+  .hermanos .dato { font-size: 12px; color: var(--text-3); }
+  .hermanos .dato::before { content: attr(data-label) ' '; }
+  .hermanos td.center { text-align: left; }
+  .hermanos td.activo-td label, .hermanos td.lector-td label { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-2); min-height: 40px; }
+
 }
+@media (min-width: 640px) and (max-width: 1000px) {
+  .hermanos tr { grid-template-columns: 2fr 1fr 1fr; grid-template-areas: "nombre nombre nombre" "sexo cargo lector" "veces ultima activo"; }
+}
+@media (min-width: 1001px) {
+  .hermanos .activo-td label span, .hermanos .lector-td label span { display: none; }
+  .hermanos .nombre-td { min-width: 240px; }
+}
+
+/* ── Reglas de asignación ─────────────────────────────────────── */
+.programa select.nombre.no-cumple { border-color: var(--warning); box-shadow: 0 0 0 2px var(--warning-soft); }
+.programa select.nombre.semana-seguida { border-color: var(--warning); }
+.filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chip {
+  border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--text-2);
+  background: var(--surface); min-height: 36px;
+}
+.chip span { color: var(--text-4); font-family: var(--font-mono); font-size: 11.5px; margin-left: 4px; }
+.chip.activo { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
+.chip.activo span { color: var(--accent); }
+.aviso-clasificar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  border-color: var(--warning); background: var(--warning-soft); }
+.hermanos tr.sin-clasificar .sexo-td select { border-color: var(--warning); }
+.hermanos select:disabled, .hermanos input:disabled { opacity: .35; }
+.hermanos .sexo-td, .hermanos .cargo-td { min-width: 130px; }

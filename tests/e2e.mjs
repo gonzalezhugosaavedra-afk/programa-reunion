@@ -107,6 +107,29 @@ await page.click('#dp-guardar');
 await page.waitForTimeout(400);
 ok((await page.locator(`#s${id4}`).textContent()).includes('Parte agregada de prueba'), 'agregar parte');
 
+// 4b. Hermanos: sugerir hermano/hermana, marcar un anciano, menús filtrados
+await page.goto(URL0 + '#/hermanos');
+await page.waitForSelector('#btn-sugerir');
+await page.click('#btn-sugerir');
+await page.waitForSelector('#btn-sugerir', { state: 'detached', timeout: 5000 }).catch(() => {});
+ok(await page.locator('#btn-sugerir').count() === 0, 'sugerir: no quedan sin clasificar');
+await page.screenshot({ path: OUT + '/04_tablet_hermanos.png' });
+const filaH = page.locator('tr[data-id]').filter({ has: page.locator('select[data-campo="sexo"] option[value="H"]:checked') }).first();
+const nombreAnciano = await filaH.locator('.nombre-persona').inputValue();
+await filaH.locator('select[data-campo="cargo"]').selectOption('anciano');
+await page.waitForTimeout(300);
+await page.goto(URL0 + '#/mes/2026-11');
+await page.waitForSelector('section.semana');
+const opcPres = await page.locator('section.semana').first().locator('select.nombre').first().locator('option').allTextContents();
+ok(opcPres.includes(nombreAnciano) && opcPres.length <= 4, `presidente: solo ancianos en el menú (${opcPres.length - 1} opciones)`);
+const opcLectura = await page.locator('section.semana').first().locator('tr', { hasText: 'Lectura de la Biblia' }).locator('select.nombre').locator('option').count();
+ok(opcLectura > 5, `lectura: hermanos varones en el menú (${opcLectura - 1})`);
+await page.locator('section.semana').first().locator('select.nombre').first().selectOption(nombreAnciano);
+await page.waitForTimeout(400);
+const oracionFinal = await page.locator('section.semana').first().locator('select.nombre[data-clave="oracion_final"]').inputValue();
+ok(oracionFinal === nombreAnciano, 'oración final se pone sola con el presidente');
+await page.screenshot({ path: OUT + '/05_tablet_reglas.png', fullPage: true });
+
 // 5. Excel, respaldo, PDF
 const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btn-excel')]);
 await dl.saveAs(OUT + '/noviembre.xlsx');
@@ -134,6 +157,10 @@ await p2.click('#btn-aplicar');
 await p2.waitForSelector('section.semana');
 ok(await p2.evaluate(() => document.documentElement.scrollWidth) <= 390, 'celular sin scroll horizontal');
 await p2.screenshot({ path: OUT + '/02_cel_mes.png' });
+await p2.goto(URL0 + '#/hermanos');
+await p2.waitForSelector('tr[data-id]');
+ok(await p2.evaluate(() => document.documentElement.scrollWidth) <= 390, 'celular: Hermanos sin scroll horizontal');
+await p2.screenshot({ path: OUT + '/02b_cel_hermanos.png' });
 const hz = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true });
 const p3 = await hz.newPage();
 vigilar(p3);

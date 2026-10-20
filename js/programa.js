@@ -125,8 +125,15 @@ export function asignar(e, semanaId, clave, nombre) {
   const sem = buscarSemana(e, semanaId);
   if (!sem) throw new Error('Semana no encontrada');
   nombre = (nombre || '').trim();
-  if (nombre) sem.asignaciones[clave] = nombre;
-  else delete sem.asignaciones[clave];
+  const a = sem.asignaciones;
+  // La oración final la hace el presidente salvo excepción: sigue al presidente
+  // mientras nadie la haya cambiado a mano.
+  if (clave === 'presidente' && (!a.oracion_final || a.oracion_final === a.presidente)) {
+    if (nombre) a.oracion_final = nombre;
+    else delete a.oracion_final;
+  }
+  if (nombre) a[clave] = nombre;
+  else delete a[clave];
 }
 
 const CAMPOS_NUMERO = new Set(['so_cancion', 'cancion_inicio', 'cancion_medio', 'cancion_final']);
@@ -239,6 +246,130 @@ export function historial(e) {
   return h;
 }
 
+// ── Quién puede hacer cada puesto ────────────────────────────────────────
+// Cada hermano tiene: sexo 'H' (hermano) | 'M' (hermana) | null (sin clasificar),
+// cargo 'anciano' | 'ministerial' | null, y lector (lector del estudio bíblico).
+
+export const CARGOS = { anciano: 'Anciano', ministerial: 'Siervo ministerial' };
+
+// Requisito de cada puesto:
+//   anciano  presidente (los ministeriales quedan aparte, como excepción)
+//   cargo    ancianos y ministeriales: Tesoros 1-2, Vida cristiana, conductor, oración final
+//   varon    cualquier hermano: lectura de la Biblia, oración inicial, discursos de Maestros
+//   lector   los marcados como lectores del estudio
+//   todos    estudiante y ayudante de Seamos mejores maestros
+export const REQUISITOS = {
+  anciano: 'solo ancianos',
+  cargo: 'solo ancianos y siervos ministeriales',
+  varon: 'solo hermanos varones',
+  lector: 'solo los lectores del estudio',
+  todos: '',
+};
+
+export function requisito(clave, parte) {
+  if (clave === 'presidente') return 'anciano';
+  if (clave === 'oracion_inicio') return 'varon';
+  if (clave === 'oracion_final') return 'cargo';
+  if (!parte) return 'todos';
+  const segundo = clave.endsWith('_2');
+  if (parte.seccion === TESOROS) return parte.rol1 === 'Estudiante' ? 'varon' : 'cargo';
+  if (parte.seccion === MAESTROS) {
+    if (segundo) return 'todos';
+    return parte.titulo.toLowerCase().startsWith('discurso') ? 'varon' : 'todos';
+  }
+  if (segundo) return parte.rol2 === 'Lector' ? 'lector' : 'cargo';
+  return 'cargo';
+}
+
+// true / false, o null si la persona todavía no está clasificada.
+export function cumple(persona, req) {
+  if (!persona || req === 'todos') return true;
+  if (!persona.sexo) return null;
+  if (req === 'varon') return persona.sexo === 'H';
+  if (req === 'anciano') return persona.cargo === 'anciano';
+  if (req === 'cargo') return persona.cargo === 'anciano' || persona.cargo === 'ministerial';
+  if (req === 'lector') return !!persona.lector && persona.sexo === 'H';
+  return true;
+}
+
+export function editarDatosPersona(e, id, cambios) {
+  const p = e.personas.find((x) => x.id === Number(id));
+  if (!p) throw new Error('No encontré a esa persona');
+  if ('sexo' in cambios) {
+    if (![null, 'H', 'M'].includes(cambios.sexo)) throw new Error('Valor inválido');
+    p.sexo = cambios.sexo;
+  }
+  if ('cargo' in cambios) {
+    if (![null, 'anciano', 'ministerial'].includes(cambios.cargo)) throw new Error('Valor inválido');
+    p.cargo = cambios.cargo;
+  }
+  if ('lector' in cambios) p.lector = !!cambios.lector;
+  // Una hermana no tiene cargo ni lee en el estudio.
+  if (p.sexo === 'M') { p.cargo = null; p.lector = false; }
+}
+
+// Sugerencia de hermano/hermana por el nombre. Es solo una ayuda: se revisa en Hermanos.
+const NOMBRES_M = new Set(('anghely eillen emily haydee helibet hellen katherine marjorie pilar vivian isabel ' +
+  'raquel ruth esther ester carmen mercedes dolores beatriz ines inés belen belén rocio rocío soledad ' +
+  'luz paz noemi noemí abigail miriam sarai sarahi raquel jasmin jazmin yasmin evelyn jennifer karen ' +
+  'nicole ingrid lilian lillian marisol maribel gisel giselle ivonne yvonne madeleine scarlett ' +
+  'monserrat montserrat consuelo rosario amparo pilar elizabeth judith edith ximena jimena').split(' '));
+const NOMBRES_H = new Set(('bautista joshua luca noe jorge felipe enrique jose vicente alexis ' +
+  'josue dante simone andre rene jaime').split(' '));
+
+// Hermana casada («Alejandra de Rojas») → hermana; nombres conocidos; si no,
+// termina en «a» → hermana, en «o» o consonante → hermano; lo dudoso queda sin clasificar.
+export function sugerirSexo(nombre) {
+  if (/\sde\s+\p{Lu}/u.test(nombre)) return 'M';
+  const primero = ordenAlfabetico(nombre.split(/\s+/)[0] || '');
+  if (!primero) return null;
+  if (NOMBRES_M.has(primero)) return 'M';
+  if (NOMBRES_H.has(primero)) return 'H';
+  if (primero.endsWith('a')) return 'M';
+  if (/[obcdfghjklmnpqrstvwxz]$/.test(primero)) return 'H';
+  return null; // termina en e, i, u, y: puede ser cualquiera
+}
+
+// Clasifica a quienes no tienen sexo marcado. Devuelve cuántos se sugirieron.
+export function sugerirSexos(e) {
+  let n = 0;
+  for (const p of e.personas) {
+    if (p.sexo) continue;
+    const s = sugerirSexo(p.nombre);
+    if (s) { p.sexo = s; n++; }
+  }
+  return n;
+}
+
+// Quienes leyeron la Biblia o fueron estudiante/ayudante en Maestros esa semana.
+function estudiantesDe(sem) {
+  if (!sem || sem.tipo === 'sin_reunion') return new Set();
+  const nombres = new Set();
+  for (const p of sem.partes) {
+    const esLectura = p.seccion === TESOROS && p.rol1 === 'Estudiante';
+    if (!esLectura && p.seccion !== MAESTROS) continue;
+    for (const k of [`p${p.id}_1`, `p${p.id}_2`]) if (sem.asignaciones[k]) nombres.add(sem.asignaciones[k]);
+  }
+  return nombres;
+}
+
+function sumarDias(iso, dias) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+// Para la regla de semanas seguidas: nombre -> 'anterior' | 'siguiente' (o ambas).
+export function vecinosDe(e, sem) {
+  const salida = {};
+  for (const [dias, cual] of [[-7, 'anterior'], [7, 'siguiente']]) {
+    const otra = e.semanas.find((s) => s.fecha_inicio === sumarDias(sem.fecha_inicio, dias));
+    if (!otra) continue;
+    for (const n of estudiantesDe(otra)) salida[n] = salida[n] ? 'ambas' : cual;
+  }
+  return salida;
+}
+
 export function guardarConfig(e, { congregacion, hora_inicio }) {
   hora_inicio = (hora_inicio || '').trim();
   if (!/^\d{1,2}:\d{2}$/.test(hora_inicio)) throw new Error('La hora debe ser HH:MM, por ejemplo 19:30');
@@ -257,10 +388,16 @@ function aMinutos(txt) {
 }
 
 // Devuelve la semana con sus filas (hora, texto, puestos) y los avisos.
-export function armarSemana(sem, cfg) {
+// Con `e` (el estado completo) revisa también quién puede hacer cada puesto y la
+// regla de semanas seguidas.
+export function armarSemana(sem, cfg, e = null) {
   const asign = sem.asignaciones;
   const partes = [...sem.partes].sort((a, b) => a.numero - b.numero);
-  const puesto = (clave, rol) => ({ clave, rol, nombre: asign[clave] || '' });
+  const puesto = (clave, rol, parte = null) => ({
+    clave, rol, nombre: asign[clave] || '', req: requisito(clave, parte),
+    // Lectura de la Biblia y Seamos mejores maestros: regla de semanas seguidas.
+    estudiante: !!parte && (parte.seccion === MAESTROS || (parte.seccion === TESOROS && parte.rol1 === 'Estudiante')),
+  });
 
   let horaTxt = sem.hora_inicio || cfg.hora_inicio || '19:30';
   let t = aMinutos(horaTxt);
@@ -284,8 +421,8 @@ export function armarSemana(sem, cfg) {
     }
     for (const p of partes.filter((x) => x.seccion === seccion)) {
       let tituloParte = p.titulo, minutos = p.minutos;
-      let puestos = [puesto(`p${p.id}_1`, p.rol1)];
-      if (p.rol2) puestos.push(puesto(`p${p.id}_2`, p.rol2));
+      let puestos = [puesto(`p${p.id}_1`, p.rol1, p)];
+      if (p.rol2) puestos.push(puesto(`p${p.id}_2`, p.rol2, p));
       let esVisita = false;
       if (visita && esEstudio(p.titulo)) {
         tituloParte = sem.so_titulo || 'Discurso del superintendente de circuito';
@@ -324,6 +461,36 @@ export function armarSemana(sem, cfg) {
   if (presidente) (usados[presidente] ||= []).push('presidente');
   const repetidos = Object.keys(usados).filter((n) => usados[n].length > 1).sort();
 
+  // Quién puede hacer cada puesto y semanas seguidas (solo con el estado completo).
+  let vecinos = {};
+  if (e && sem.tipo !== 'sin_reunion') {
+    const porNombre = Object.fromEntries(e.personas.map((p) => [p.nombre, p]));
+    const revisar = (pu, donde) => {
+      if (!pu.nombre || pu.clave === 'so_nombre') return;
+      if (cumple(porNombre[pu.nombre], pu.req) === false) {
+        pu.noCumple = true;
+        avisos.push(`${pu.nombre} no corresponde a «${donde}»: ${REQUISITOS[pu.req]}.`);
+      }
+    };
+    revisar({ clave: 'presidente', nombre: presidente, req: 'anciano' }, 'Presidente');
+    for (const f of filas) {
+      for (const pu of f.puestos) revisar(pu, pu.rol === 'Oración' ? `Oración (${f.texto})` : f.texto + (pu.rol ? ` · ${pu.rol}` : ''));
+    }
+    vecinos = vecinosDe(e, sem);
+    const yaAvisados = new Set();
+    for (const f of filas) {
+      for (const pu of f.puestos) {
+        const cual = pu.estudiante && pu.nombre && vecinos[pu.nombre];
+        if (!cual) continue;
+        pu.semanaSeguida = cual;
+        if (yaAvisados.has(pu.nombre)) continue;
+        yaAvisados.add(pu.nombre);
+        const cuando = cual === 'ambas' ? 'la semana anterior y la siguiente' : `la semana ${cual}`;
+        avisos.push(`${pu.nombre} también participa ${cuando} (lectura de la Biblia o Seamos mejores maestros).`);
+      }
+    }
+  }
+
   const total = filas.reduce((a, f) => a + f.puestos.length, 0) + 1;
   const llenos = filas.reduce((a, f) => a + f.puestos.filter((p) => p.nombre).length, 0) + (presidente ? 1 : 0);
 
@@ -339,6 +506,7 @@ export function armarSemana(sem, cfg) {
     partes,
     avisos,
     repetidos,
+    vecinos,
     pendientes: sem.tipo === 'sin_reunion' ? 0 : total - llenos,
   };
 }
@@ -361,7 +529,7 @@ export function mesesDisponibles(e) {
 export function semanasDelMes(e, ym) {
   return e.semanas.filter((s) => s.fecha_inicio.startsWith(ym + '-'))
     .sort((a, b) => a.fecha_inicio.localeCompare(b.fecha_inicio))
-    .map((s) => armarSemana(s, e.config));
+    .map((s) => armarSemana(s, e.config, e));
 }
 
 export function mesActualOProximo(e, hoy = new Date()) {
