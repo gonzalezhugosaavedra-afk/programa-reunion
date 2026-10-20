@@ -25,7 +25,8 @@ const MES_RE = Object.keys(MESES).join('|');
 // Encabezado ya sin espacios: "7-13DESEPTIEMBREJEREMÍAS32,33"
 const RE_ENCABEZADO = new RegExp(
   `^(\\d{1,2})(?:DE(${MES_RE}))?(?:-|–|A)(\\d{1,2})DE(${MES_RE})(.*)$`);
-const RE_PARTE = /^(\d{1,2})\.\s+(.+?)\s*\((\d{1,2})\s*mins?\.\)(.*)$/;
+// Sin espacio obligatorio tras el punto: «7.“Te salvarás…”» (guía nov-dic 2026).
+const RE_PARTE = /^(\d{1,2})\.\s*(?=\D)(.+?)\s*\((\d{1,2})\s*mins?\.\)(.*)$/;
 const RE_CANCION = /Canción\s+(\d{1,3})/;
 // Portada ya sin espacios: "SEPTIEMBREYOCTUBREDE2026"
 const RE_TITULO_PDF = new RegExp(`(${MES_RE})Y(${MES_RE})DE(\\d{4})`);
@@ -170,6 +171,19 @@ function arreglarLectura(t) {
 
 // ── Lectura de la guía ───────────────────────────────────────────────────
 
+const esEncabezado = (bloque) =>
+  RE_ENCABEZADO.test(sinControl(bloque.split('\n')[0]).replace(/\s+/g, '').toUpperCase());
+
+// Desde la guía de noviembre 2026 hay semanas que caben en una sola página, y en
+// las páginas impares el encabezado («9-15 DE NOVIEMBRE…») va arriba a la derecha:
+// leyendo la columna izquierda primero, Tesoros y la canción de inicio quedaban en
+// la semana anterior. El encabezado de la página se lee siempre primero.
+function encabezadoPrimero(bs) {
+  const i = bs.findIndex(esEncabezado);
+  if (i <= 0 || bs.filter(esEncabezado).length > 1) return bs;
+  return [bs[i], ...bs.slice(0, i), ...bs.slice(i + 1)];
+}
+
 // pdfjs: la librería pdf.js ya cargada. datos: Uint8Array/ArrayBuffer del PDF.
 export async function leerGuia(pdfjs, datos) {
   const tarea = pdfjs.getDocument({ data: datos, isEvalSupported: false });
@@ -186,7 +200,7 @@ export async function leerGuia(pdfjs, datos) {
         const m = limpiar(bs.join('\n')).toUpperCase().replace(/\s+/g, '').match(RE_TITULO_PDF);
         if (m && MESES[m[1]]) { anio = Number(m[3]); primerMes = MESES[m[1]]; }
       }
-      bloques.push(...bs);
+      bloques.push(...encabezadoPrimero(bs));
     }
     if (anio === null) throw new Error('No encontré el título de la guía (p. ej. «SEPTIEMBRE Y OCTUBRE DE 2026»).');
     return armarSemanas(bloques, anio, primerMes);
@@ -209,6 +223,12 @@ function armarSemanas(bloques, anio, primerMes) {
     // Encabezado de semana: "7-13 DE SEPTIEMBRE  JEREMÍAS 32, 33"
     const junto = lineas[0].replace(/\s+/g, '').toUpperCase();
     const m = junto.match(RE_ENCABEZADO);
+    // Anexo al final de la guía («9-15 DE NOVIEMBRE» sin lectura, de una semana ya
+    // leída): lo que sigue no es de la última semana y se ignora.
+    if (m && !m[5] && semanas.some((s) => s.fecha_inicio === fechaInicio(m, anio, primerMes)[0])) {
+      actual = null;
+      continue;
+    }
     if (m && m[5]) {
       const [iso, fechas] = fechaInicio(m, anio, primerMes);
       // La lectura se toma del texto con espacios (libros como «1 CORINTIOS»).

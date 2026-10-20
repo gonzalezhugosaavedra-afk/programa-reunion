@@ -13,7 +13,7 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
 FUERA = {"sw.js"}
-CARPETAS_FUERA = {"tools"}
+CARPETAS_FUERA = {"tools", "tests"}
 EXT_FUERA = {".py", ".txt", ".md"}
 
 

@@ -2,7 +2,7 @@
 // La lista y la versión las escribe tools/preparar_publicacion.py (no editar a mano):
 // cada vez que cambia un archivo cambia la versión y los equipos bajan la nueva.
 
-const VERSION = '64a5e2bc5545';
+const VERSION = 'fb86f80ff0ef';
 const ARCHIVOS = [
   './',
   './css/cajaapp.css',
@@ -30,6 +30,7 @@ const ARCHIVOS = [
   './icons/icono.svg',
   './imprimir.html',
   './js/app.js',
+  './js/correcciones.js',
   './js/datos.js',
   './js/excel.js',
   './js/imprimir.js',
@@ -39,7 +40,6 @@ const ARCHIVOS = [
   './js/vendor/pdf.min.mjs',
   './js/vendor/pdf.worker.min.mjs',
   './manifest.webmanifest',
-  './tests/probar_lector.mjs',
 ];
 
 const CACHE = `programa-reunion-${VERSION}`;

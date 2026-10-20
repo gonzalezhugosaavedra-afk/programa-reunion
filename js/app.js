@@ -5,6 +5,7 @@
 import * as D from './datos.js';
 import * as P from './programa.js';
 import { leerGuia, problemas } from './lector.js';
+import { corregirDatos } from './correcciones.js';
 
 const VERSION = '1.0';
 let estado = null;
@@ -794,5 +795,15 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     return;
   }
   D.pedirPersistencia();
+  // Arregla datos guardados con un lector anterior (p. ej. guía nov-dic 2026), sin tocar los nombres.
+  try {
+    const corregidas = corregirDatos(estado);
+    if (corregidas.length) {
+      await D.guardarEstado(estado);
+      toast(`Se completaron ${corregidas.length} semanas de la guía de noviembre-diciembre (los nombres se mantienen).`);
+    }
+  } catch (err) {
+    console.error('No se pudieron aplicar las correcciones', err);
+  }
   navegar();
 })();
