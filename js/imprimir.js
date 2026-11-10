@@ -1,5 +1,6 @@
 // Vista para imprimir / guardar como PDF: imprimir.html?mes=AAAA-MM
 // Arma las hojas (dos semanas por hoja) igual que templates/imprimir.html.
+// Con &semana=<id> imprime solo esa semana (se usa para la visita del superintendente).
 
 import { cargarEstado, leerImagen } from './datos.js';
 import { nombreMes, semanasDelMes } from './programa.js';
@@ -11,6 +12,9 @@ function htmlSemana(s, urlImagen) {
   h += s.tipo !== 'sin_reunion'
     ? `<td class="c-rol">Presidente:</td><td class="c-nombre">${esc(s.presidente)}</td></tr></table>`
     : '<td></td><td></td></tr></table>';
+  if (s.tipo === 'visita') {
+    h += `<div class="franja-visita">Visita del superintendente de circuito${s.so_nombre ? ` · ${esc(s.so_nombre)}` : ''}</div>`;
+  }
 
   if (s.tipo === 'sin_reunion') {
     h += `<div class="especial"><div class="motivo">${esc(s.motivo || 'Sin reunión')}</div>`;
@@ -59,14 +63,19 @@ async function iniciar() {
   }
   document.getElementById('volver').href = `./#/mes/${ym}`;
   const e = await cargarEstado();
-  const semanas = semanasDelMes(e, ym);
+  const idSemana = Number(new URLSearchParams(location.search).get('semana')) || null;
+  const semanas = semanasDelMes(e, ym).filter((s) => !idSemana || s.id === idSemana);
   if (!semanas.length) {
-    cont.innerHTML = '<div class="mensaje">Ese mes no tiene semanas cargadas en este dispositivo.</div>';
+    cont.innerHTML = `<div class="mensaje">${idSemana ? 'Esa semana' : 'Ese mes'} no está cargada en este dispositivo.</div>`;
     return;
   }
-  const mes = nombreMes(ym);
-  document.title = `Programa ${mes}`; // nombre sugerido del PDF
-  document.getElementById('titulo-barra').textContent = `Programa ${mes}`;
+  // Nombre sugerido del PDF: «Programa Noviembre 2026» o, para una sola semana,
+  // «Programa 16 – 22 de noviembre (visita del superintendente)».
+  const titulo = idSemana
+    ? `Programa ${semanas[0].fechas.toLowerCase()}${semanas[0].tipo === 'visita' ? ' (visita del superintendente)' : ''}`
+    : `Programa ${nombreMes(ym)}`;
+  document.title = titulo;
+  document.getElementById('titulo-barra').textContent = titulo;
 
   const urls = {};
   for (const s of semanas) {

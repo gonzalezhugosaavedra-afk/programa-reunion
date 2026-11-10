@@ -281,3 +281,7 @@ body { overscroll-behavior-y: none; }
 .hermanos tr.sin-clasificar .sexo-td select { border-color: var(--warning); }
 .hermanos select:disabled, .hermanos input:disabled { opacity: .35; }
 .hermanos .sexo-td, .hermanos .cargo-td { min-width: 130px; }
+
+/* Semana de visita: PDF solo de esa semana */
+.visita-pdf { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--accent-border); font-size: 13px; color: var(--text-2); }

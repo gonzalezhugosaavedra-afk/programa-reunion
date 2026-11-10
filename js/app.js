@@ -133,7 +133,8 @@ const personasMenu = () => estado.personas.filter((p) => p.activo).sort((a, b) =
 // Quien participa la semana anterior/siguiente (lectura o Maestros) va marcado ⚠.
 function opcionesNombres(nombre, pu, personas, vecinos) {
   const opcion = (p, extra = '') => {
-    const marca = pu.estudiante && vecinos[p.nombre] ? ` ⚠ ${vecinos[p.nombre] === 'ambas' ? 'semanas vecinas' : 'semana ' + vecinos[p.nombre]}` : '';
+    // Solo «⚠»: con el texto largo el nombre se cortaba; el aviso de la semana dice cuál.
+    const marca = pu.estudiante && vecinos[p.nombre] ? ' ⚠' : '';
     return `<option value="${esc(p.nombre)}"${p.nombre === nombre ? ' selected' : ''}>${esc(p.nombre)}${marca}${extra}</option>`;
   };
   const pueden = [], excepcion = [], sinClasificar = [];
@@ -221,6 +222,10 @@ function htmlSemana(s, personas, urlsImagen) {
     <div class="field corto">
       <label class="label" for="soc${s.id}">Canción final</label>
       <input class="input campo-semana" id="soc${s.id}" data-semana="${s.id}" data-campo="so_cancion" data-repintar="1" inputmode="numeric" value="${esc(s.so_cancion ?? '')}" placeholder="${esc(s.cancion_final_guia ?? '')}">
+    </div>
+    <div class="visita-pdf">
+      <span>Programa de esta semana por separado (para la visita):</span>
+      <a class="btn primary sm" href="imprimir.html?mes=${s.fecha_inicio.slice(0, 7)}&amp;semana=${s.id}">${ICONOS.bajar} PDF solo esta semana</a>
     </div>
   </div>`;
     }
